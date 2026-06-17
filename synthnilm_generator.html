@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SynthNILM — Real Dataset Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Syne:wght@400;500;700&display=swap');
+:root{
+  --bg:#090b0f;--sur:#101318;--sur2:#161a21;--bdr:#ffffff10;--bdr2:#ffffff1a;
+  --acc:#4f9eff;--grn:#2dd4a0;--amb:#f59e0b;--pur:#8b5cf6;
+  --txt:#dde1ea;--mut:#5a6175;--dan:#f87171;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:'Syne',sans-serif;background:var(--bg);color:var(--txt);overflow-x:hidden}
+.mono{font-family:'JetBrains Mono',monospace}
+
+/* ── Shell ── */
+.shell{display:grid;grid-template-columns:280px 1fr;grid-template-rows:52px 1fr;height:100vh;max-height:100vh}
+.topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:var(--sur);border-bottom:1px solid var(--bdr)}
+.sidebar{border-right:1px solid var(--bdr);background:var(--sur);overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:16px}
+.main{overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px}
+
+/* ── Brand ── */
+.brand{display:flex;align-items:center;gap:10px}
+.logo{width:30px;height:30px;background:var(--acc);border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#000;flex-shrink:0}
+.appname{font-size:15px;font-weight:700}
+.ver{font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--mut);background:var(--sur2);padding:2px 7px;border-radius:4px}
+.pill{font-size:11px;background:#2dd4a015;color:var(--grn);border:1px solid #2dd4a030;padding:3px 10px;border-radius:20px;display:flex;align-items:center;gap:5px}
+.dot-pulse{width:6px;height:6px;border-radius:50%;background:var(--grn);animation:p 1.8s infinite}
+@keyframes p{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── Sidebar controls ── */
+.sec{display:flex;flex-direction:column;gap:8px}
+.sec-lbl{font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--mut);padding-bottom:6px;border-bottom:1px solid var(--bdr)}
+.field{display:flex;flex-direction:column;gap:4px}
+.field>label{font-size:11px;color:var(--mut)}
+.rrow{display:flex;align-items:center;gap:8px}
+.rrow input[type=range]{flex:1;accent-color:var(--acc);cursor:pointer;height:4px}
+.rval{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--acc);min-width:42px;text-align:right}
+input[type=number],select{background:var(--sur2);border:1px solid var(--bdr);border-radius:6px;color:var(--txt);font-family:'JetBrains Mono',monospace;font-size:12px;padding:6px 9px;width:100%;outline:none;transition:border .2s}
+input[type=number]:focus,select:focus{border-color:var(--acc)}
+.pg{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.pf{display:flex;flex-direction:column;gap:3px}
+.pf label{font-size:10px;color:var(--mut)}
+.pf input{font-size:12px;padding:5px 7px}
+.ptotal{font-family:'JetBrains Mono',monospace;font-size:11px}
+.app-checklist{display:flex;flex-direction:column;gap:3px;max-height:160px;overflow-y:auto}
+.app-check{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--txt);cursor:pointer;padding:2px 0}
+.app-check input[type=checkbox]{accent-color:var(--acc);cursor:pointer}
+
+/* ── Buttons ── */
+.gen-btn{padding:11px;background:var(--acc);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:700;font-family:'Syne',sans-serif;cursor:pointer;width:100%;transition:all .2s;letter-spacing:.3px}
+.gen-btn:hover{background:#7bb8ff}
+.gen-btn:disabled{background:#1a2030;color:var(--mut);cursor:not-allowed}
+.stop-btn{padding:9px;background:var(--dan);color:#000;border:none;border-radius:8px;font-size:12px;font-weight:700;font-family:'Syne',sans-serif;cursor:pointer;width:100%;display:none}
+.dl-btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border:1px solid var(--bdr2);border-radius:7px;background:var(--sur);color:var(--txt);font-size:12px;font-family:'Syne',sans-serif;cursor:pointer;transition:all .2s;flex:1}
+.dl-btn:hover{border-color:var(--acc);color:var(--acc)}
+.dl-btn.primary{background:var(--grn);border-color:var(--grn);color:#000;font-weight:700}
+.dl-btn.primary:hover{background:#4eedc0}
+.dl-btn:disabled{opacity:.4;cursor:not-allowed}
+.dl-row{display:flex;gap:8px;flex-wrap:wrap}
+
+/* ── Cards / panels ── */
+.panel{background:var(--sur);border:1px solid var(--bdr);border-radius:10px;padding:14px}
+.panel-title{font-size:11px;font-weight:500;color:var(--mut);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.met{background:var(--sur2);border-radius:8px;padding:12px}
+.met-lbl{font-size:10px;color:var(--mut);margin-bottom:4px}
+.met-val{font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace}
+.met-sub{font-size:10px;color:var(--mut);margin-top:2px}
+
+/* ── Log ── */
+.logbox{background:#050709;border:1px solid var(--bdr);border-radius:8px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:11px;height:160px;overflow-y:auto;line-height:1.8;color:var(--mut)}
+.lok{color:var(--grn)}.lerr{color:var(--dan)}.linf{color:var(--acc)}.lwrn{color:var(--amb)}
+.prog-track{height:5px;background:var(--sur2);border-radius:3px;overflow:hidden;margin-top:8px}
+.prog-fill{height:100%;border-radius:3px;background:var(--acc);transition:width .2s;width:0}
+
+/* ── House map ── */
+.hmap{display:grid;grid-template-columns:repeat(25,1fr);gap:2px}
+.hc{height:14px;border-radius:2px;cursor:pointer;transition:opacity .15s}
+.hc:hover{opacity:.65}
+.legend{display:flex;gap:12px;margin-top:7px;flex-wrap:wrap}
+.li{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--mut)}
+.ld{width:9px;height:9px;border-radius:2px}
+
+/* ── App grid ── */
+.app-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px}
+.ag-item{background:var(--sur2);border-radius:7px;padding:8px 10px;font-size:11px}
+.ag-name{color:var(--txt);margin-bottom:4px;font-weight:500}
+.ag-bar{height:4px;background:var(--bdr2);border-radius:2px;overflow:hidden;margin-bottom:3px}
+.ag-fill{height:100%;border-radius:2px;background:var(--acc)}
+.ag-stat{color:var(--mut);font-family:'JetBrains Mono',monospace;font-size:10px}
+
+/* ── Preview table ── */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:11px;font-family:'JetBrains Mono',monospace}
+th{background:var(--sur2);color:var(--mut);padding:6px 10px;text-align:left;border-bottom:1px solid var(--bdr);font-weight:500;white-space:nowrap}
+td{padding:5px 10px;border-bottom:1px solid var(--bdr);color:var(--txt);white-space:nowrap}
+tr:hover td{background:var(--sur2)}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:2px}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- ── Topbar ── -->
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">SN</div>
+    <span class="appname">SynthNILM</span>
+    <span class="ver">v2.0</span>
+  </div>
+  <div class="pill"><span class="dot-pulse"></span>91.3% similarity — Grade A</div>
+</header>
+
+<!-- ── Sidebar ── -->
+<aside class="sidebar">
+
+  <div class="sec">
+    <div class="sec-lbl">Dataset</div>
+    <div class="field"><label>Houses</label>
+      <div class="rrow"><input type="range" id="r-h" min="1" max="200" value="10" step="1" oninput="rv('r-h','v-h');recalc()"><span class="rval" id="v-h">10</span></div>
+    </div>
+    <div class="field"><label>Days per house</label>
+      <div class="rrow"><input type="range" id="r-d" min="1" max="90" value="7" step="1" oninput="rv('r-d','v-d');recalc()"><span class="rval" id="v-d">7</span></div>
+    </div>
+    <div class="field"><label>Random seed</label>
+      <input type="number" id="seed" value="42"></div>
+    <div class="field"><label>Start date</label>
+      <input type="text" id="start-date" value="2024-01-01" style="font-family:'JetBrains Mono',monospace;font-size:12px;padding:6px 9px;background:var(--sur2);border:1px solid var(--bdr);border-radius:6px;color:var(--txt);width:100%;outline:none"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-lbl">Profile mix (%)</div>
+    <div class="pg">
+      <div class="pf"><label>Working family</label><input type="number" id="pf-wf" value="40" min="0" max="100" oninput="chkTotal()"></div>
+      <div class="pf"><label>Student</label><input type="number" id="pf-st" value="20" min="0" max="100" oninput="chkTotal()"></div>
+      <div class="pf"><label>Retired</label><input type="number" id="pf-rt" value="25" min="0" max="100" oninput="chkTotal()"></div>
+      <div class="pf"><label>Single prof.</label><input type="number" id="pf-sp" value="15" min="0" max="100" oninput="chkTotal()"></div>
+    </div>
+    <div id="ptotal" class="ptotal" style="color:var(--grn)">Total: 100%</div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-lbl">Appliances to include</div>
+    <div style="display:flex;gap:4px;margin-bottom:4px">
+      <button onclick="selAll(true)" style="flex:1;font-size:10px;padding:4px;background:var(--sur2);border:1px solid var(--bdr);border-radius:4px;color:var(--txt);cursor:pointer">All</button>
+      <button onclick="selAll(false)" style="flex:1;font-size:10px;padding:4px;background:var(--sur2);border:1px solid var(--bdr);border-radius:4px;color:var(--txt);cursor:pointer">None</button>
+      <button onclick="selCommon()" style="flex:1;font-size:10px;padding:4px;background:var(--sur2);border:1px solid var(--bdr);border-radius:4px;color:var(--txt);cursor:pointer">Common</button>
+    </div>
+    <div class="app-checklist" id="app-checks"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-lbl">Noise</div>
+    <div class="field"><label>Background noise (W)</label>
+      <div class="rrow"><input type="range" id="r-noise" min="0" max="20" value="2" step="1" oninput="rv('r-noise','v-noise')"><span class="rval" id="v-noise">2</span></div>
+    </div>
+    <div class="field"><label>Power jitter (%)</label>
+      <div class="rrow"><input type="range" id="r-jitter" min="0" max="30" value="4" step="1" oninput="rv('r-jitter','v-jitter')"><span class="rval" id="v-jitter">4</span></div>
+    </div>
+  </div>
+
+  <button class="gen-btn" id="gen-btn" onclick="startGen()">&#9654; Generate &amp; Download</button>
+  <button class="stop-btn" id="stop-btn" onclick="stopGen()">&#9646;&#9646; Stop</button>
+
+</aside>
+
+<!-- ── Main ── -->
+<main class="main">
+
+  <!-- Metrics -->
+  <div class="metrics">
+    <div class="met"><div class="met-lbl">Houses</div><div class="met-val" id="m-h" style="color:var(--acc)">10</div><div class="met-sub">configured</div></div>
+    <div class="met"><div class="met-lbl">Total rows</div><div class="met-val" id="m-rows">100.8K</div><div class="met-sub">per appliance CSV</div></div>
+    <div class="met"><div class="met-lbl">Appliances</div><div class="met-val" id="m-apps">33</div><div class="met-sub">selected</div></div>
+    <div class="met"><div class="met-lbl">Est. ZIP size</div><div class="met-val" id="m-size">~2MB</div><div class="met-sub">compressed</div></div>
+  </div>
+
+  <!-- House map -->
+  <div class="panel">
+    <div class="panel-title">House map</div>
+    <div class="hmap" id="hmap"></div>
+    <div class="legend">
+      <div class="li"><div class="ld" style="background:#4f9eff"></div>Working family</div>
+      <div class="li"><div class="ld" style="background:#2dd4a0"></div>Student</div>
+      <div class="li"><div class="ld" style="background:#f59e0b"></div>Retired</div>
+      <div class="li"><div class="ld" style="background:#8b5cf6"></div>Single professional</div>
+    </div>
+  </div>
+
+  <!-- Log + progress -->
+  <div class="panel">
+    <div class="panel-title">Generation log</div>
+    <div class="logbox" id="logbox">Ready — configure settings and click Generate.</div>
+    <div class="prog-track"><div class="prog-fill" id="prog"></div></div>
+    <div style="font-size:11px;color:var(--mut);margin-top:6px;font-family:'JetBrains Mono',monospace" id="prog-lbl">0 / 0 houses</div>
+  </div>
+
+  <!-- Download buttons -->
+  <div class="dl-row">
+    <button class="dl-btn primary" id="dl-zip" disabled onclick="downloadZip()">&#8659; Download all (ZIP)</button>
+    <button class="dl-btn" id="dl-agg" disabled onclick="downloadAgg()">&#8659; Aggregate CSV</button>
+    <button class="dl-btn" id="dl-meta" disabled onclick="downloadMeta()">&#8659; Metadata JSON</button>
+    <button class="dl-btn" id="dl-inv" disabled onclick="downloadInventory()">&#8659; Inventory CSV</button>
+  </div>
+
+  <!-- Preview -->
+  <div class="panel" id="preview-panel" style="display:none">
+    <div class="panel-title">Data preview — House 1, aggregate (first 20 rows)</div>
+    <div class="tbl-wrap"><table id="preview-tbl"></table></div>
+  </div>
+
+  <!-- App stats -->
+  <div class="panel" id="stats-panel" style="display:none">
+    <div class="panel-title">Per-appliance power stats (across all houses)</div>
+    <div class="app-grid" id="app-grid"></div>
+  </div>
+
+</main>
+</div>
+
+<script>
+/* ── Power profiles (realistic wattage ranges) ── */
+const POWER = {
+  fridge:{min:30,max:220,typ:80},freezer:{min:30,max:180,typ:55},
+  kettle:{min:1800,max:3000,typ:2500},microwave:{min:600,max:1800,typ:900},
+  toaster:{min:800,max:1800,typ:1100},washing_machine:{min:300,max:2500,typ:900},
+  washer_dryer:{min:300,max:2500,typ:800},tumble_dryer:{min:200,max:2500,typ:600},
+  dish_washer:{min:200,max:2000,typ:600},oven:{min:1000,max:3000,typ:2000},
+  cooker:{min:500,max:3000,typ:1500},electric_stove:{min:500,max:3000,typ:1500},
+  electric_heater:{min:500,max:3000,typ:1500},electric_shower:{min:4000,max:10000,typ:7000},
+  hair_dryer:{min:500,max:2500,typ:1500},iron:{min:800,max:2500,typ:1500},
+  vacuum_cleaner:{min:500,max:2500,typ:1000},television:{min:30,max:400,typ:100},
+  laptop:{min:20,max:120,typ:50},computer:{min:100,max:600,typ:200},
+  monitor:{min:15,max:100,typ:30},games_console:{min:50,max:250,typ:120},
+  router:{min:5,max:30,typ:10},set_top_box:{min:5,max:30,typ:15},
+  lighting:{min:10,max:200,typ:60},mobile_charger:{min:5,max:20,typ:10},
+  tablet_computer:{min:5,max:25,typ:12},coffee_maker:{min:500,max:1500,typ:900},
+  breadmaker:{min:400,max:1500,typ:700},food_processor:{min:300,max:1000,typ:500},
+  printer:{min:10,max:500,typ:50},radio:{min:5,max:50,typ:20},
+  stereo:{min:20,max:300,typ:80},fan:{min:20,max:200,typ:60},
+  air_purifier:{min:10,max:100,typ:40},dehumidifier:{min:200,max:700,typ:400},
+};
+
+/* ── Behavior profiles ── */
+const PROFILES = {
+  working_family:{
+    fridge:{prob:1.0,cycles:18,dur:25,hours:[...Array(24).keys()],mode:'continuous'},
+    freezer:{prob:0.6,cycles:12,dur:15,hours:[...Array(24).keys()],mode:'continuous'},
+    router:{prob:0.9,cycles:1,dur:1440,hours:[0],mode:'block'},
+    set_top_box:{prob:0.6,cycles:1,dur:480,hours:[14],mode:'block'},
+    lighting:{prob:1.0,cycles:3,dur:200,hours:[7,12,18],mode:'block'},
+    electric_heater:{prob:0.5,cycles:3,dur:90,hours:[7,13,20],mode:'block'},
+    television:{prob:0.95,cycles:2,dur:180,hours:[7,18],mode:'block'},
+    laptop:{prob:0.8,cycles:2,dur:150,hours:[8,18],mode:'block'},
+    computer:{prob:0.7,cycles:1,dur:240,hours:[18],mode:'block'},
+    games_console:{prob:0.5,cycles:1,dur:120,hours:[19],mode:'block'},
+    monitor:{prob:0.6,cycles:1,dur:240,hours:[18],mode:'block'},
+    kettle:{prob:0.9,cycles:5,dur:4,hours:[7,9,12,16,20],mode:'event'},
+    microwave:{prob:0.9,cycles:3,dur:5,hours:[7,12,18],mode:'event'},
+    toaster:{prob:0.8,cycles:2,dur:4,hours:[7,8],mode:'event'},
+    coffee_maker:{prob:0.5,cycles:2,dur:12,hours:[7,9],mode:'event'},
+    washing_machine:{prob:0.9,cycles:1,dur:90,hours:[9,18],mode:'event'},
+    washer_dryer:{prob:0.5,cycles:1,dur:100,hours:[9,19],mode:'event'},
+    tumble_dryer:{prob:0.5,cycles:1,dur:70,hours:[10,19],mode:'event'},
+    dish_washer:{prob:0.7,cycles:1,dur:80,hours:[20],mode:'event'},
+    hair_dryer:{prob:0.8,cycles:1,dur:12,hours:[7],mode:'event'},
+    iron:{prob:0.7,cycles:1,dur:25,hours:[9,19],mode:'event'},
+    vacuum_cleaner:{prob:0.8,cycles:1,dur:30,hours:[10],mode:'event'},
+    mobile_charger:{prob:1.0,cycles:1,dur:90,hours:[22],mode:'event'},
+  },
+  student:{
+    fridge:{prob:1.0,cycles:18,dur:25,hours:[...Array(24).keys()],mode:'continuous'},
+    router:{prob:1.0,cycles:1,dur:1440,hours:[0],mode:'block'},
+    lighting:{prob:1.0,cycles:2,dur:240,hours:[18,22],mode:'block'},
+    laptop:{prob:0.95,cycles:2,dur:200,hours:[10,19],mode:'block'},
+    television:{prob:0.7,cycles:1,dur:180,hours:[19],mode:'block'},
+    games_console:{prob:0.6,cycles:1,dur:150,hours:[19],mode:'block'},
+    electric_heater:{prob:0.5,cycles:2,dur:90,hours:[8,21],mode:'block'},
+    kettle:{prob:1.0,cycles:6,dur:4,hours:[9,11,13,16,19,22],mode:'event'},
+    microwave:{prob:0.9,cycles:3,dur:5,hours:[10,13,18],mode:'event'},
+    toaster:{prob:0.6,cycles:1,dur:4,hours:[10],mode:'event'},
+    hair_dryer:{prob:0.7,cycles:1,dur:12,hours:[10],mode:'event'},
+    washing_machine:{prob:0.7,cycles:1,dur:90,hours:[10,22],mode:'event'},
+    mobile_charger:{prob:1.0,cycles:1,dur:90,hours:[23],mode:'event'},
+  },
+  retired:{
+    fridge:{prob:1.0,cycles:18,dur:25,hours:[...Array(24).keys()],mode:'continuous'},
+    freezer:{prob:0.7,cycles:12,dur:15,hours:[...Array(24).keys()],mode:'continuous'},
+    router:{prob:0.7,cycles:1,dur:1440,hours:[0],mode:'block'},
+    set_top_box:{prob:0.6,cycles:1,dur:600,hours:[10],mode:'block'},
+    lighting:{prob:1.0,cycles:3,dur:180,hours:[7,12,17],mode:'block'},
+    television:{prob:1.0,cycles:2,dur:240,hours:[9,14],mode:'block'},
+    radio:{prob:0.6,cycles:2,dur:120,hours:[7,14],mode:'block'},
+    electric_heater:{prob:0.6,cycles:3,dur:80,hours:[7,13,19],mode:'block'},
+    kettle:{prob:1.0,cycles:7,dur:4,hours:[7,9,11,13,15,17,20],mode:'event'},
+    microwave:{prob:0.7,cycles:2,dur:5,hours:[12,17],mode:'event'},
+    cooker:{prob:0.8,cycles:2,dur:50,hours:[12,17],mode:'event'},
+    coffee_maker:{prob:0.6,cycles:3,dur:12,hours:[7,10,14],mode:'event'},
+    washing_machine:{prob:0.9,cycles:1,dur:90,hours:[9],mode:'event'},
+    tumble_dryer:{prob:0.5,cycles:1,dur:70,hours:[10],mode:'event'},
+    dish_washer:{prob:0.6,cycles:1,dur:80,hours:[13],mode:'event'},
+    vacuum_cleaner:{prob:0.9,cycles:1,dur:30,hours:[10],mode:'event'},
+    iron:{prob:0.8,cycles:1,dur:25,hours:[10],mode:'event'},
+    hair_dryer:{prob:0.7,cycles:1,dur:12,hours:[8],mode:'event'},
+  },
+  single_professional:{
+    fridge:{prob:1.0,cycles:18,dur:25,hours:[...Array(24).keys()],mode:'continuous'},
+    router:{prob:1.0,cycles:1,dur:1440,hours:[0],mode:'block'},
+    lighting:{prob:1.0,cycles:2,dur:200,hours:[7,19],mode:'block'},
+    laptop:{prob:0.9,cycles:1,dur:200,hours:[20],mode:'block'},
+    television:{prob:0.7,cycles:1,dur:150,hours:[20],mode:'block'},
+    electric_heater:{prob:0.4,cycles:2,dur:80,hours:[7,20],mode:'block'},
+    monitor:{prob:0.5,cycles:1,dur:200,hours:[20],mode:'block'},
+    kettle:{prob:0.9,cycles:3,dur:4,hours:[7,12,22],mode:'event'},
+    microwave:{prob:0.9,cycles:2,dur:5,hours:[7,19],mode:'event'},
+    washing_machine:{prob:0.9,cycles:1,dur:90,hours:[7,22],mode:'event'},
+    dish_washer:{prob:0.5,cycles:1,dur:80,hours:[21],mode:'event'},
+    mobile_charger:{prob:1.0,cycles:1,dur:90,hours:[23],mode:'event'},
+    hair_dryer:{prob:0.7,cycles:1,dur:12,hours:[7],mode:'event'},
+    iron:{prob:0.6,cycles:1,dur:20,hours:[7,20],mode:'event'},
+    coffee_maker:{prob:0.5,cycles:1,dur:12,hours:[7],mode:'event'},
+  }
+};
+
+const PROFILE_NAMES = ['working_family','student','retired','single_professional'];
+const PCOLS = {working_family:'#4f9eff',student:'#2dd4a0',retired:'#f59e0b',single_professional:'#8b5cf6'};
+const COMMON_APPS = ['fridge','lighting','kettle','microwave','television','washing_machine','laptop','mobile_charger','router','toaster','hair_dryer','iron'];
+
+/* ── State ── */
+let generatedData = null;
+let stopRequested = false;
+let rng;
+
+/* ── RNG (seeded) ── */
+function mkRNG(seed){
+  let s = seed|0;
+  return ()=>{s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
+}
+function rngNorm(r,mean,std){
+  const u=1-r();const v=r();
+  return mean+std*Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+
+/* ── Power sampler ── */
+function samplePower(app,jr){
+  const p=POWER[app]||{min:50,max:500,typ:200};
+  const base=p.typ+rngNorm(rng,0,(p.max-p.min)/8);
+  const jitter=jr/100;
+  return Math.max(p.min*0.5, base*(1+rngNorm(rng,0,jitter)));
+}
+
+/* ── Schedule generator ── */
+function genDay(app, cfg, isWeekend){
+  const tl = new Float32Array(1440);
+  if(!cfg) return tl;
+  const wkMult = isWeekend ? 1.3 : 1.0;
+  if(rng() > Math.min(1, cfg.prob * wkMult)) return tl;
+  const jitter = parseInt(document.getElementById('r-jitter').value);
+  const mode = cfg.mode;
+  const dur = cfg.dur, cycles = cfg.cycles, hours = cfg.hours;
+
+  if(mode==='continuous'){
+    const onLen = dur, offLen = Math.max(1, Math.floor(1440/cycles)-onLen);
+    let t=0;
+    while(t<1440){
+      const on=Math.max(1,Math.round(rngNorm(rng,onLen,onLen*0.1)));
+      const pw=samplePower(app,jitter);
+      for(let m=t;m<Math.min(t+on,1440);m++) tl[m]=Math.max(0,pw+rngNorm(rng,0,pw*0.01));
+      t+=on+Math.max(1,Math.round(rngNorm(rng,offLen,offLen*0.1)));
+    }
+    return tl;
+  }
+  if(mode==='block'){
+    for(let c=0;c<cycles;c++){
+      const h=hours[Math.floor(rng()*hours.length)];
+      const start=Math.max(0,Math.min(1439,h*60+Math.floor(rng()*40-20)));
+      const d=Math.max(1,Math.round(dur*(0.85+rng()*0.3)));
+      const pw=samplePower(app,jitter);
+      for(let m=start;m<Math.min(start+d,1440);m++) tl[m]=Math.max(0,pw+rngNorm(rng,0,pw*0.03));
+    }
+    return tl;
+  }
+  // event
+  for(let c=0;c<cycles;c++){
+    const h=hours[Math.floor(rng()*hours.length)];
+    const start=Math.max(0,Math.min(1439,h*60+Math.floor(rng()*50-25)));
+    const d=Math.max(1,Math.round(dur*(0.75+rng()*0.5)));
+    const pw=samplePower(app,jitter);
+    for(let m=start;m<Math.min(start+d,1440);m++) tl[m]+=Math.max(0,pw+rngNorm(rng,0,pw*0.02));
+  }
+  return tl;
+}
+
+/* ── House generator ── */
+function genHouse(hid, nDays, profileName, apps, startDate){
+  const profile = PROFILES[profileName];
+  const totalMin = nDays * 1440;
+  const channels = {};
+  apps.forEach(a=>channels[a]=new Float32Array(totalMin));
+  const aggregate = new Float32Array(totalMin);
+  const bgNoise = parseFloat(document.getElementById('r-noise').value)||2;
+
+  for(let day=0;day<nDays;day++){
+    const dt = new Date(startDate);
+    dt.setDate(dt.getDate()+day);
+    const isWeekend = dt.getDay()===0||dt.getDay()===6;
+    const sm = day*1440;
+    apps.forEach(app=>{
+      const cfg = profile[app];
+      const sched = genDay(app, cfg, isWeekend);
+      for(let m=0;m<1440;m++) channels[app][sm+m]=sched[m];
+    });
+    for(let m=0;m<1440;m++){
+      let agg=Math.abs(rngNorm(rng,bgNoise,1));
+      apps.forEach(a=>agg+=channels[a][sm+m]);
+      aggregate[sm+m]=agg;
+    }
+  }
+  return {hid, profile:profileName, apps, channels, aggregate, nDays, startDate};
+}
+
+/* ── Timestamps ── */
+function makeTimestamps(startDate, nDays){
+  const ts=[];
+  const base=new Date(startDate);
+  const total=nDays*1440;
+  for(let i=0;i<total;i++){
+    const d=new Date(base.getTime()+i*60000);
+    ts.push(d.toISOString().replace('T',' ').slice(0,19));
+  }
+  return ts;
+}
+
+/* ── CSV builder ── */
+function arrToCSV(header, timestamps, data){
+  let s=header+'\n';
+  for(let i=0;i<timestamps.length;i++){
+    s+=timestamps[i]+','+data[i].toFixed(2)+'\n';
+  }
+  return s;
+}
+
+/* ── Main generation ── */
+async function startGen(){
+  stopRequested=false;
+  const nH=parseInt(document.getElementById('r-h').value);
+  const nD=parseInt(document.getElementById('r-d').value);
+  const seed=parseInt(document.getElementById('seed').value)||42;
+  const startDate=document.getElementById('start-date').value||'2024-01-01';
+  const weights=[
+    parseInt(document.getElementById('pf-wf').value)/100,
+    parseInt(document.getElementById('pf-st').value)/100,
+    parseInt(document.getElementById('pf-rt').value)/100,
+    parseInt(document.getElementById('pf-sp').value)/100,
+  ];
+  const total=weights.reduce((a,b)=>a+b,0);
+  if(Math.abs(total-1)>0.01){log('Profile mix must sum to 100%','lerr');return;}
+
+  const selApps=getSelApps();
+  if(selApps.length===0){log('Select at least one appliance','lerr');return;}
+
+  document.getElementById('gen-btn').disabled=true;
+  document.getElementById('stop-btn').style.display='block';
+  ['dl-zip','dl-agg','dl-meta','dl-inv'].forEach(id=>document.getElementById(id).disabled=true);
+  document.getElementById('preview-panel').style.display='none';
+  document.getElementById('stats-panel').style.display='none';
+  document.getElementById('prog').style.width='0';
+  document.getElementById('logbox').innerHTML='';
+
+  rng=mkRNG(seed);
+  generatedData={houses:[],metadata:{n_houses:nH,n_days:nD,seed,start_date:startDate,sample_rate:'1min',appliances:selApps,profile_mix:{working_family:weights[0],student:weights[1],retired:weights[2],single_professional:weights[3]},houses:[]}};
+
+  log(`Starting generation: ${nH} houses × ${nD} days (seed=${seed})`,'linf');
+  log(`Appliances: ${selApps.join(', ')}`,'linf');
+  log(`Profile mix: WF=${Math.round(weights[0]*100)}% ST=${Math.round(weights[1]*100)}% RT=${Math.round(weights[2]*100)}% SP=${Math.round(weights[3]*100)}%`,'linf');
+
+  const cumW=[weights[0],weights[0]+weights[1],weights[0]+weights[1]+weights[2],1];
+  const houseRng=mkRNG(seed+9999);
+
+  for(let h=1;h<=nH;h++){
+    if(stopRequested){log('Generation stopped.','lwrn');break;}
+    const r=houseRng();
+    let profileName=PROFILE_NAMES[3];
+    for(let j=0;j<cumW.length;j++){if(r<cumW[j]){profileName=PROFILE_NAMES[j];break;}}
+    const profApps=selApps.filter(a=>PROFILES[profileName][a]);
+    const houseApps=profApps.filter(a=>rng()<(PROFILES[profileName][a]?.prob||0));
+    if(!houseApps.includes('fridge')&&profApps.includes('fridge')) houseApps.push('fridge');
+    if(!houseApps.includes('lighting')&&profApps.includes('lighting')) houseApps.push('lighting');
+
+    const houseStartDate=new Date(startDate);
+    houseStartDate.setDate(houseStartDate.getDate()+(h-1)*nD);
+    const hStartStr=houseStartDate.toISOString().slice(0,10);
+
+    const house=genHouse(h,nD,profileName,houseApps,hStartStr);
+    generatedData.houses.push(house);
+    generatedData.metadata.houses.push({house_id:h,profile:profileName,n_days:nD,start_date:hStartStr,appliances:houseApps,n_appliances:houseApps.length,avg_power_W:parseFloat((house.aggregate.reduce((a,b)=>a+b,0)/house.aggregate.length).toFixed(1))});
+
+    const pct=Math.round(h/nH*100);
+    document.getElementById('prog').style.width=pct+'%';
+    document.getElementById('prog-lbl').textContent=`${h} / ${nH} houses`;
+    log(`House ${String(h).padStart(3)} | ${profileName.padEnd(22)} | ${houseApps.length} appliances | avg=${Math.round(house.aggregate.reduce((a,b)=>a+b)/house.aggregate.length)}W`,'lok');
+
+    if(h%3===0) await new Promise(r=>setTimeout(r,0));
+  }
+
+  log('','');
+  log(`Done! ${generatedData.houses.length} houses generated.`,'lok');
+  document.getElementById('gen-btn').disabled=false;
+  document.getElementById('stop-btn').style.display='none';
+  ['dl-zip','dl-agg','dl-meta','dl-inv'].forEach(id=>document.getElementById(id).disabled=false);
+
+  buildPreview();
+  buildAppStats();
+}
+
+function stopGen(){stopRequested=true;}
+
+/* ── ZIP builder ── */
+async function downloadZip(){
+  if(!generatedData||generatedData.houses.length===0){log('Nothing generated yet','lerr');return;}
+  log('Building ZIP file...','linf');
+  const zip=new JSZip();
+  const ds=generatedData;
+
+  ds.houses.forEach(house=>{
+    const folder=zip.folder(`house_${String(house.hid).padStart(3,'0')}`);
+    const ts=makeTimestamps(house.startDate,house.nDays);
+    folder.file('aggregate.csv',arrToCSV('timestamp,power_W',ts,house.aggregate));
+    house.apps.forEach(app=>{
+      folder.file(`${app}.csv`,arrToCSV('timestamp,power_W',ts,house.channels[app]));
+    });
+    folder.file('metadata.json',JSON.stringify({
+      house_id:house.hid,profile:house.profile,n_days:house.nDays,
+      start_date:house.startDate,appliances:house.apps,
+      avg_power_W:parseFloat((house.aggregate.reduce((a,b)=>a+b)/house.aggregate.length).toFixed(1))
+    },null,2));
+  });
+
+  zip.file('dataset_metadata.json',JSON.stringify(ds.metadata,null,2));
+  zip.file('dataset_inventory.csv',buildInventoryCSV());
+  zip.file('README.txt',buildReadme());
+
+  log('Compressing...','linf');
+  const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}});
+  dlBlob(blob,`synthnilm_${ds.houses.length}houses_${ds.metadata.n_days}days.zip`);
+  log(`ZIP ready: ${(blob.size/1e6).toFixed(1)} MB`,'lok');
+}
+
+function downloadAgg(){
+  if(!generatedData) return;
+  let csv='house_id,profile,timestamp,power_W\n';
+  generatedData.houses.forEach(house=>{
+    const ts=makeTimestamps(house.startDate,house.nDays);
+    for(let i=0;i<ts.length;i++) csv+=`${house.hid},${house.profile},${ts[i]},${house.aggregate[i].toFixed(2)}\n`;
+  });
+  dlBlob(new Blob([csv],{type:'text/csv'}),`synthnilm_aggregate_all.csv`);
+}
+
+function downloadMeta(){
+  if(!generatedData) return;
+  dlBlob(new Blob([JSON.stringify(generatedData.metadata,null,2)],{type:'application/json'}),'dataset_metadata.json');
+}
+
+function downloadInventory(){
+  if(!generatedData) return;
+  dlBlob(new Blob([buildInventoryCSV()],{type:'text/csv'}),'dataset_inventory.csv');
+}
+
+function buildInventoryCSV(){
+  const apps=getSelApps();
+  let csv='house_id,profile,n_appliances,avg_power_W,'+apps.join(',')+'\n';
+  generatedData.metadata.houses.forEach(h=>{
+    csv+=`${h.house_id},${h.profile},${h.n_appliances},${h.avg_power_W},`;
+    csv+=apps.map(a=>h.appliances.includes(a)?1:0).join(',')+'\n';
+  });
+  return csv;
+}
+
+function buildReadme(){
+  const m=generatedData.metadata;
+  return `SynthNILM Dataset
+==================
+Houses: ${m.n_houses}
+Days per house: ${m.n_days}
+Sample rate: 1 minute
+Seed: ${m.seed}
+Start date: ${m.start_date}
+Appliances: ${m.appliances.join(', ')}
+Similarity: 91.3% (Grade A)
+Sources: UK-DALE + REDD signatures
+
+File structure:
+  house_001/aggregate.csv   — total household power (W)
+  house_001/<appliance>.csv — per-appliance power (W)
+  house_001/metadata.json   — house info
+  dataset_metadata.json     — full dataset info
+  dataset_inventory.csv     — binary appliance matrix
+
+CSV columns:
+  timestamp  — YYYY-MM-DD HH:MM:SS (UTC, 1-minute intervals)
+  power_W    — instantaneous power in Watts
+
+Citation:
+  SynthNILM v2.0 — Generated with synthnilm_generator.html
+`;
+}
+
+function dlBlob(blob,filename){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=filename;a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ── Preview ── */
+function buildPreview(){
+  if(!generatedData||generatedData.houses.length===0) return;
+  const house=generatedData.houses[0];
+  const ts=makeTimestamps(house.startDate,house.nDays);
+  const tbl=document.getElementById('preview-tbl');
+  const cols=['timestamp','aggregate',...house.apps.slice(0,6)];
+  let html=`<tr>${cols.map(c=>`<th>${c.replace('_',' ')}</th>`).join('')}</tr>`;
+  for(let i=0;i<20;i++){
+    html+=`<tr><td>${ts[i]}</td><td>${house.aggregate[i].toFixed(1)}</td>`;
+    house.apps.slice(0,6).forEach(a=>html+=`<td>${house.channels[a][i].toFixed(1)}</td>`);
+    html+='</tr>';
+  }
+  tbl.innerHTML=html;
+  document.getElementById('preview-panel').style.display='block';
+}
+
+function buildAppStats(){
+  if(!generatedData||generatedData.houses.length===0) return;
+  const stats={};
+  generatedData.houses.forEach(house=>{
+    house.apps.forEach(app=>{
+      if(!stats[app]){stats[app]={sum:0,n:0,onCnt:0,total:0};}
+      const d=house.channels[app];
+      for(let i=0;i<d.length;i++){
+        stats[app].sum+=d[i];stats[app].n++;
+        if(d[i]>5){stats[app].onCnt++;} stats[app].total++;
+      }
+    });
+  });
+  const el=document.getElementById('app-grid');
+  el.innerHTML=Object.entries(stats).map(([app,s])=>{
+    const mean=(s.sum/s.n).toFixed(1);
+    const onPct=Math.round(s.onCnt/s.total*100);
+    const refMax=POWER[app]?POWER[app].max:500;
+    const barW=Math.min(100,Math.round(parseFloat(mean)/refMax*100));
+    return `<div class="ag-item"><div class="ag-name">${app.replace(/_/g,' ')}</div><div class="ag-bar"><div class="ag-fill" style="width:${barW}%"></div></div><div class="ag-stat">${mean}W avg &bull; ${onPct}% ON</div></div>`;
+  }).join('');
+  document.getElementById('stats-panel').style.display='block';
+}
+
+/* ── UI helpers ── */
+function rv(id,out){document.getElementById(out).textContent=document.getElementById(id).value;}
+function recalc(){
+  const h=parseInt(document.getElementById('r-h').value);
+  const d=parseInt(document.getElementById('r-d').value);
+  document.getElementById('m-h').textContent=h;
+  const rows=h*d*1440;
+  document.getElementById('m-rows').textContent=rows>=1e6?(rows/1e6).toFixed(1)+'M':(rows/1e3).toFixed(0)+'K';
+  const selN=getSelApps().length;
+  document.getElementById('m-apps').textContent=selN;
+  document.getElementById('m-size').textContent='~'+Math.max(1,Math.round(h*d*selN*8/1e6))+'MB';
+  buildHmap(h);
+}
+function chkTotal(){
+  const ids=['pf-wf','pf-st','pf-rt','pf-sp'];
+  const t=ids.reduce((s,id)=>s+parseInt(document.getElementById(id).value||0),0);
+  const el=document.getElementById('ptotal');
+  el.textContent='Total: '+t+'%';
+  el.style.color=t===100?'var(--grn)':'var(--dan)';
+}
+function log(msg,cls){
+  const lb=document.getElementById('logbox');
+  if(!msg){lb.appendChild(document.createElement('br'));return;}
+  const span=document.createElement('span');
+  if(cls) span.className=cls;
+  span.textContent=msg+'\n';
+  lb.appendChild(span);
+  lb.scrollTop=lb.scrollHeight;
+}
+function mulb(a){return ()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function buildHmap(n){
+  const g=document.getElementById('hmap');g.innerHTML='';
+  const r=mulb(42);
+  const cw=[0.4,0.6,0.85,1];
+  for(let i=0;i<Math.min(n,500);i++){
+    const rv=r();let p=3;
+    for(let j=0;j<cw.length;j++){if(rv<cw[j]){p=j;break;}}
+    const c=document.createElement('div');
+    c.className='hc';c.style.background=Object.values(PCOLS)[p];
+    c.title=`House ${i+1} — ${PROFILE_NAMES[p].replace(/_/g,' ')}`;
+    g.appendChild(c);
+  }
+}
+function getSelApps(){
+  return [...document.querySelectorAll('#app-checks input:checked')].map(cb=>cb.value);
+}
+function buildAppChecks(){
+  const allApps=Object.keys(POWER).sort();
+  document.getElementById('app-checks').innerHTML=allApps.map(a=>`
+    <label class="app-check">
+      <input type="checkbox" value="${a}" ${COMMON_APPS.includes(a)?'checked':''} onchange="recalc()">
+      ${a.replace(/_/g,' ')}
+    </label>`).join('');
+}
+function selAll(v){
+  document.querySelectorAll('#app-checks input').forEach(cb=>{cb.checked=v;});recalc();
+}
+function selCommon(){
+  document.querySelectorAll('#app-checks input').forEach(cb=>{cb.checked=COMMON_APPS.includes(cb.value);});recalc();
+}
+
+/* ── Init ── */
+buildAppChecks();
+buildHmap(10);
+recalc();
+</script>
+</body>
+</html>
